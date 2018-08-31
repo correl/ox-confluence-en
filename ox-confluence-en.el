@@ -6,7 +6,7 @@
 ;; URL: https://github.com/correl/ox-confluence-en
 ;; Version: 1.0
 ;; Keywords: outlines, confluence, wiki
-;; Package-Requires: ((emacs "24") (org "8.2") (s "1"))
+;; Package-Requires: ((emacs "24") (org "9.1") (s "1.12"))
 
 ;; This file is not part of GNU Emacs.
 
@@ -77,8 +77,11 @@ https://marketplace.atlassian.com/plugins/de.griffel.confluence.plugins.plant-um
               (ox-confluence-en-export-as-confluence a s v b))))))
 
 (defun ox-confluence-en-headline (headline contents info)
-  (let* ((low-level-rank (org-export-low-level-p headline info))
-	 (text (org-export-data (org-element-property :title headline)
+  "Transcode a HEADLINE element from Org to Confluence wiki markup.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
+  (let* ((text (org-export-data (org-element-property :title headline)
 				info))
 	 (todo (org-export-data (org-element-property :todo-keyword headline)
 				info))
@@ -96,18 +99,26 @@ https://marketplace.atlassian.com/plugins/de.griffel.confluence.plugins.plant-um
             (if (org-string-nw-p contents) contents ""))))
 
 (defun ox-confluence-en-paragraph (paragraph contents info)
-  "Strip newlines from paragraphs.
+  "Transcode a PARAGRAPH element from Org to Confluence wiki markup.
 
-Confluence will include any line breaks in the paragraph, rather
-than treating it as reflowable whitespace."
+Unlike `org-confluence-table-cell', newlines are stripped from
+PARAGRAPH. This is because Confluence will include any line
+breaks in the paragraph, rather than treating it as reflowable
+whitespace.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (replace-regexp-in-string "\n" " " contents))
 
 (defun ox-confluence-en-src-block (src-block contents info)
-  "Embed source block results using available macros.
+  "Embed SRC-BLOCK results using available macros.
 
 Currently, PlantUML, Graphviz, and Ditaa graphs will be embedded
 using the macros provided by the PlantUML plugin, if it is
-available."
+available.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (let ((lang (org-element-property :language src-block))
         (code (org-export-format-code-default src-block info))
         (caption (if (org-export-get-caption src-block)
@@ -115,30 +126,13 @@ available."
     (if (and ox-confluence-en-use-plantuml-macro
              (member lang '("plantuml" "dot" "ditaa")))
         (ox-confluence-en--macro "plantuml" code `((type . ,lang)))
-      (ox-confluence-en--block lang "Emacs" caption code))))
-
-(defun ox-confluence-en--block (language theme caption contents)
-  (concat "\{code:theme=" theme
-          (when language (format "|language=%s" language))
-          (when caption (format "|title=%s" caption))
-          "}\n"
-          contents
-          "\{code\}\n"))
-
-(defun ox-confluence-en-quote-block (quote-block contents info)
-  (ox-confluence-en--macro "quote" contents))
-
-(defun ox-confluence-en-special-block (special-block contents info)
-  (let ((block-type (downcase (org-element-property :type special-block))))
-    (if (member block-type '("info" "note" "warning"))
-        (ox-confluence-en--macro block-type contents)
-      (org-ascii-special-block special-block contents info))))
-
-(defun ox-confluence-en-verbatim (verbatim contents info)
-  (format "{{%s}}"
-          (org-trim (org-element-property :value verbatim))))
+      (ox-confluence-en--code-block lang code caption))))
 
 (defun ox-confluence-en--macro (name contents &optional arguments)
+  "Build a Confluence wiki macro block.
+
+Inserts CONTENTS into a macro NAME. ARGUMENTS may be provided as
+an alist."
   (let ((open-tag (concat "\{" name
                           (when arguments
                             (concat ":"
@@ -152,25 +146,94 @@ available."
     (if contents (concat open-tag "\n" contents "\n" close-tag)
       open-tag)))
 
+(defun ox-confluence-en--code-block (language contents &optional caption theme)
+  "Build code macro block wrapping CONTENTS as LANGUAGE.
+
+A CAPTION may be provided to be used as a title to the code
+block. If no THEME is provided, code will be highlighted using
+Confluence's Emacs theme."
+  (let ((arguments `((language . ,language)
+                     (theme . ,(or theme "Emacs")))))
+    (when caption (push `(title . ,caption) arguments))
+    (ox-confluence-en--macro "code" contents arguments)))
+
+(defun ox-confluence-en-quote-block (quote-block contents info)
+  "Transcode QUOTE-BLOCK element from Org to Confluence wiki markup.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
+  (ox-confluence-en--macro "quote" contents))
+
+(defun ox-confluence-en-special-block (special-block contents info)
+  "Transcode a SPECIAL-BLOCK element from Org to Confluence wiki markup.
+
+If the block type is info, note, or warning, it will be
+transcoded using the matching Confluence wiki macro.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
+  (let ((block-type (downcase (org-element-property :type special-block))))
+    (if (member block-type '("info" "note" "warning"))
+        (ox-confluence-en--macro block-type contents)
+      (org-ascii-special-block special-block contents info))))
+
+(defun ox-confluence-en-verbatim (verbatim contents info)
+  "Transcode a VERBATIM element from Org to Confluence wiki markup.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
+  (format "{{%s}}"
+          (org-trim (org-element-property :value verbatim))))
+
 ;;;###autoload
 (defun ox-confluence-en-export-as-confluence
     (&optional async subtreep visible-only body-only ext-plist)
-  "Export the current org-mode buffer as Confluence wiki markup.
+  "Export the current buffer as Confluence wiki markup.
 
-The markup is exported to a temporary buffer, which you can use
-to copy the content to be pasted within Confluence."
+If narrowing is active in the current buffer, only export its
+narrowed part.
+
+If a region is active, export that region.
+
+A non-nil optional argument ASYNC means the process should happen
+asynchronously.  The resulting buffer should be accessible
+through the `org-export-stack' interface.
+
+When optional argument SUBTREEP is non-nil, export the sub-tree
+at point, extracting information from the headline properties
+first.
+
+When optional argument VISIBLE-ONLY is non-nil, don't export
+contents of hidden elements.
+
+When optional argument BODY-ONLY is non-nil, strip title and
+table of contents from output.
+
+EXT-PLIST, when provided, is a property list with external
+parameters overriding Org default settings, but still inferior to
+file-local settings.
+
+Export is done in a buffer named \"*Org Confluence Export*\", which
+will be displayed when `org-export-show-temporary-export-buffer'
+is non-nil."
   (interactive)
   (let ((org-babel-default-header-args:plantuml '((:exports . "code")))
         (org-babel-default-header-args:dot '((:exports . "code")))
         (org-babel-default-header-args:ditaa '((:exports . "code"))))
-    (org-export-to-buffer 'confluence-en "*org CONFLUENCE Export*"
+    (org-export-to-buffer 'confluence-en "*Org Confluence Export*"
       async subtreep visible-only body-only ext-plist (lambda () (text-mode)))))
 
 (defun ox-confluence-en-table-cell  (table-cell contents info)
-  "Wrap table cell contents in whitespace.
+  "Transcode a TABLE-CELL element from Org to Confluence wiki markup.
 
-Without the extra whitespace, cells will collapse together thanks
-to confluence's table header syntax being multiple pipes."
+Unlike `org-confluence-table-cell', table cell contents are
+wrapped in whitespace.
+
+Without the extra whitespace, cells would collapse together
+thanks to confluence's table header syntax being multiple pipes.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (let ((table-row (org-export-get-parent table-cell)))
     (concat
      (when (org-export-table-row-starts-header-p table-row info)
@@ -186,6 +249,14 @@ INFO is a plist used as a communication channel."
     (trans "☒ ")))
 
 (defun ox-confluence-en-item (item contents info)
+  "Transcode a list ITEM element from Org to Confluence wiki markup.
+
+If the `:as-table' attribute is non-nil (set via
+`#+ATTR_CONFLUENCE' on the list), the list item will be
+transcoded as a table row.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (let ((as-table (or (org-export-read-attribute :attr_confluence
                                                  (org-export-get-parent item)
                                                  :as-table))))
@@ -193,6 +264,10 @@ INFO is a plist used as a communication channel."
       (ox-confluence-en--item-as-list item contents info))))
 
 (defun ox-confluence-en--item-as-list (item contents info)
+  "Transcode a list ITEM element as a bulleted list item.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (let ((list-type (org-element-property :type (org-export-get-parent item)))
         (checkbox (ox-confluence-en--checkbox item info))
         (depth (1+ (ox-confluence-en--li-depth item info))))
@@ -210,6 +285,10 @@ INFO is a plist used as a communication channel."
                (org-trim contents))))))
 
 (defun ox-confluence-en--item-as-table (item contents info)
+  "Transcode a list ITEM as a table row.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (let* ((list-type (org-element-property :type (org-export-get-parent item)))
          (checkbox (ox-confluence-en--checkbox item info))
          (depth (ox-confluence-en--li-depth item info))
@@ -224,18 +303,31 @@ INFO is a plist used as a communication channel."
                "|" (org-export-data (org-trim contents) info) " |")))))
 
 (defun ox-confluence-en--li-depth (item info)
+  "Return the depth of a list ITEM.
+
+Used while building lists as tables, where the nested depth is
+tracked as a property in INFO."
   (let ((nested (plist-get info :ox-confluence-en-nested)))
-    (message "Nested: %s" nested)
     (- (org-confluence--li-depth item)
        (or nested 0))))
 
 (defun ox-confluence-en-timestamp (timestamp contents info)
+  "Transcode a TIMESTAMP from Org to Confluence wiki markup.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (s-replace-all
    '(("[" . "")
      ("]" . ""))
    (org-ascii-timestamp timestamp contents info)))
 
 (defun ox-confluence-en-property-drawer (property-drawer contents info)
+  "Transcode a PROPERTY-DRAWER from Org to Confluence wiki markup.
+
+The drawer's CONTENTS will be wrapped in an info macro.
+
+CONTENTS holds the contents of the element. INFO is a plist
+holding contextual information."
   (and (org-string-nw-p contents)
        (ox-confluence-en--macro "info" contents)))
 
