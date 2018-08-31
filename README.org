@@ -1,0 +1,51 @@
+#+TITLE: ox-confluence-en
+#+STARTUP: indent
+#+TODO: NONE
+
+An enhanced Confluence wiki markup exporter for Org-mode.
+
+This exporter is based on (and therefore requires) =ox-confluence=,
+which is included in org-contrib. It extends and improves upon it in
+several ways:
+
+- The exported wiki syntax is cleaned up, resolving various rendering quirks.
+- An entry is added to the exporter menu for ease of use.
+- Status badge macros are used when exporting todo keywords.
+- Support is added for exporting PlantUML graphs as a confluence macro.
+
+* Features
+** TODO keywords exported as status badges
+
+If your document exports TODO keywords (=todo:t= in =#+OPTIONS=), they
+will be rendered using Confluence's status badge macro. TODO keywords
+will be colored red, and DONE keywords will be colored green.
+
+** PlantUML, Graphviz, and Ditaa graphs
+
+if =ox-confluence-en-use-plantuml-macro= is set to =t=, PlantUML,
+Graphviz, and Ditaa source code blocks will be exported using the
+Confluence PlantUML macro, allowing them to be included in exported
+documents without having to upload the resulting images separately
+(instead including the PlantUML source in the document, to be rendered
+on the server). This requires the free [[https://marketplace.atlassian.com/plugins/de.griffel.confluence.plugins.plant-uml][Confluence PlantUML plugin]] to
+be installed on the server.
+
+** Lists as tables
+
+Any list can be exported as a table, by setting =:as-table= to =t=
+using =#+ATTR_CONFLUENCE=:
+
+#+BEGIN_SRC org
+  ,#+ATTR_CONFLUENCE: :as-table t
+  - Thing one
+  - Thing two
+#+END_SRC
+
+This is even more useful when using a description list, as the first
+column will be rendered as headings:
+
+#+BEGIN_SRC org
+  ,#+ATTR_CONFLUENCE: :as-table t
+  - Author :: John Doe
+  - Published :: 2018-08-09
+#+END_SRC
