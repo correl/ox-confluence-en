@@ -173,9 +173,13 @@ transcoded using the matching Confluence wiki macro.
 CONTENTS holds the contents of the element. INFO is a plist
 holding contextual information."
   (let ((block-type (downcase (org-element-property :type special-block))))
-    (if (member block-type '("info" "note" "warning"))
-        (ox-confluence-en--macro block-type contents)
-      (org-ascii-special-block special-block contents info))))
+    (cond ((string-equal block-type "info")
+           (ox-confluence-en--macro "info" contents))
+          ((member block-type '("note" "notes"))
+           (ox-confluence-en--macro "note" contents))
+          ((string-equal block-type "warning")
+           (ox-confluence-en--macro "warning" contents))
+          (t (org-ascii-special-block special-block contents info)))))
 
 (defun ox-confluence-en-verbatim (verbatim contents info)
   "Transcode a VERBATIM element from Org to Confluence wiki markup.
