@@ -312,8 +312,8 @@ holding contextual information."
 Used while building lists as tables, where the nested depth is
 tracked as a property in INFO."
   (let ((nested (plist-get info :ox-confluence-en-nested)))
-    (- (org-confluence--li-depth item)
-       (or nested 0))))
+    (max 0 (- (org-confluence--li-depth item)
+              (or nested 0)))))
 
 (defun ox-confluence-en-timestamp (timestamp contents info)
   "Transcode a TIMESTAMP from Org to Confluence wiki markup.
