@@ -81,21 +81,22 @@ https://marketplace.atlassian.com/plugins/de.griffel.confluence.plugins.plant-um
 
 CONTENTS holds the contents of the element. INFO is a plist
 holding contextual information."
-  (let* ((text (org-export-data (org-element-property :title headline)
-				info))
-	 (todo (org-export-data (org-element-property :todo-keyword headline)
-				info))
-	 (level (org-export-get-relative-level headline info))
-	 (todo-text (if (or (not (plist-get info :with-todo-keywords))
-			    (string= todo ""))
-			""
+  (let* ((text (org-export-data (org-element-property :title headline) info))
+         (todo (org-export-data (org-element-property :todo-keyword headline) info))
+         (custom-id (org-export-data (org-element-property :CUSTOM_ID headline) info))
+         (level (org-export-get-relative-level headline info))
+         (anchor (if (string= custom-id "") ""
+                   (format "{anchor:%s}\n" custom-id)))
+         (todo-text (if (or (not (plist-get info :with-todo-keywords))
+                            (string= todo ""))
+                        ""
                       (let* ((todo-type (org-element-property :todo-type headline))
                              (status-color (cond
                                             ((equal todo-type 'todo) "red")
                                             (t "green"))))
                         (format "%s " (ox-confluence-en--macro "status" nil `((color . ,status-color) (title . ,todo))))))))
     ;; Else: Standard headline.
-    (format "h%s. %s%s\n%s" level todo-text text
+    (format "%sh%s. %s%s\n%s" anchor level todo-text text
             (if (org-string-nw-p contents) contents ""))))
 
 (defun ox-confluence-en-paragraph (paragraph contents info)
